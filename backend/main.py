@@ -4,14 +4,16 @@
 # Features: upload resume (PDF/DOCX), extract text,
 #           parse with Groq LLM, match with job description,
 #           store results in Supabase (with embeddings),
-#           ATS compatibility check.
+#           ATS compatibility check, cover letter generation.
 # 100% free tier compatible.
 # ============================================================
-print("=== Starting main.py ===", flush=True)
+
 import os
 import json
 import logging
 import re
+import sys
+import traceback
 from typing import List, Dict, Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -36,30 +38,42 @@ import numpy as np
 # Supabase client
 from supabase import create_client, Client
 
+# -----------------------------------------------------------
 # Load environment variables from .env file
+# -----------------------------------------------------------
 load_dotenv()
 
 # -----------------------------------------------------------
-# Configuration & Initialization
+# Configuration & Initialization (WRAPPED IN TRY/EXCEPT)
 # -----------------------------------------------------------
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+print("=== Starting main.py ===", flush=True)
 
-if not GROQ_API_KEY or not SUPABASE_URL or not SUPABASE_KEY:
-    raise RuntimeError("Missing required environment variables. Check your .env file.")
+try:
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# Supabase client
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    if not GROQ_API_KEY or not SUPABASE_URL or not SUPABASE_KEY:
+        raise RuntimeError("Missing required environment variables. Check your .env file.")
 
-# Groq client (free API – no credit card needed)
-groq_client = Groq(api_key=GROQ_API_KEY)
+    # Supabase client
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    print("Supabase client created.", flush=True)
 
-# Embedding model (local, free, runs on CPU)
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    # Groq client (free API – no credit card needed)
+    groq_client = Groq(api_key=GROQ_API_KEY)
+    print("Groq client created.", flush=True)
+
+    # Embedding model (local, free, runs on CPU)
+    embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    print("Embedding model loaded.", flush=True)
+
+except Exception:
+    print("=== FATAL STARTUP ERROR ===", flush=True)
+    traceback.print_exc()
+    sys.exit(1)
 
 # FastAPI app
-print("=== Creating FastAPI app ===", flush=True)
 app = FastAPI(title="AI Resume Analyzer")
 
 # Basic logging
@@ -80,7 +94,6 @@ def extract_text(file: UploadFile) -> str:
     # Try unstructured if available (best for messy PDFs)
     if unstructured and (filename.endswith(".pdf") or filename.endswith(".docx")):
         try:
-            # unstructured needs the file path or bytes
             elements = unstructured.partition(
                 file=file.file,
                 content_type="application/pdf" if filename.endswith(".pdf") else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -190,7 +203,7 @@ def ats_check(raw_text: str, filename: str) -> dict:
     """
     checks = []
     score = 0
-    max_score = 7  # number of checks
+    max_score = 7
 
     # 1. File format
     if filename.lower().endswith((".pdf", ".docx")):
@@ -220,7 +233,7 @@ def ats_check(raw_text: str, filename: str) -> dict:
     else:
         checks.append({"check": "Contact info", "status": "fail", "detail": "Missing email or phone number"})
 
-    # 4. Text-based content (no image-only)
+    # 4. No images or scanned content (heuristic: very low text density might indicate image-only)
     text_length = len(raw_text.strip())
     if text_length > 200:
         checks.append({"check": "Text-based content", "status": "pass", "detail": f"Resume contains {text_length} characters of text"})
@@ -228,7 +241,7 @@ def ats_check(raw_text: str, filename: str) -> dict:
     else:
         checks.append({"check": "Text-based content", "status": "fail", "detail": "Text too short – may be image-based (use OCR)"})
 
-    # 5. No unusual unicode
+    # 5. No unusual unicode (common in garbled PDFs)
     unusual_chars = re.findall(r'[^\x00-\x7F\u2013\u2014\u2018\u2019\u201c\u201d\u2022\u2026\u00A0\u00B0]', raw_text)
     if len(unusual_chars) < 10:
         checks.append({"check": "No garbled text", "status": "pass", "detail": "No excessive Unicode artifacts"})
@@ -236,14 +249,14 @@ def ats_check(raw_text: str, filename: str) -> dict:
     else:
         checks.append({"check": "No garbled text", "status": "fail", "detail": "Resume may contain corrupt characters from PDF conversion"})
 
-    # 6. Bullet points
+    # 6. Bullet points used (for readability)
     if re.search(r'[•\-\*\u2022]', raw_text):
         checks.append({"check": "Bullet points", "status": "pass", "detail": "Bullet points help ATS parse achievements"})
         score += 1
     else:
         checks.append({"check": "Bullet points", "status": "fail", "detail": "Use bullet points for work experience"})
 
-    # 7. Action verbs
+    # 7. Action verbs present (crude check)
     action_verbs = ["managed", "developed", "created", "designed", "implemented", "led", "achieved", "improved", "reduced", "increased"]
     found_verbs = [v for v in action_verbs if re.search(rf'\b{v}\b', raw_text, re.IGNORECASE)]
     if len(found_verbs) >= 3:
@@ -259,6 +272,9 @@ def ats_check(raw_text: str, filename: str) -> dict:
         "checks": checks
     }
 
+# -----------------------------------------------------------
+# 5. Cover Letter Generation
+# -----------------------------------------------------------
 def generate_cover_letter(resume_text: str, job_desc: str) -> str:
     """
     Uses Groq to generate a tailored cover letter based on the resume and job description.
@@ -280,7 +296,7 @@ def generate_cover_letter(resume_text: str, job_desc: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7,          # a little creativity is good for letters
+            temperature=0.7,
             max_tokens=1000,
         )
         return completion.choices[0].message.content.strip()
@@ -289,17 +305,17 @@ def generate_cover_letter(resume_text: str, job_desc: str) -> str:
         return "Sorry, we couldn't generate the cover letter at this time. Please try again."
 
 # -----------------------------------------------------------
-# 5. Main API Endpoint
+# 6. Main API Endpoint – Resume Analysis
 # -----------------------------------------------------------
 @app.post("/analyze")
 async def analyze_resume(
     file: UploadFile = File(...),
     job_desc: str = Form(...),
-    user_id: str = Form(None)  # optional, only if auth is set up
+    user_id: str = Form(None)
 ):
     """
     Upload a resume (PDF or DOCX) and a job description.
-    Returns parsed resume data, match score, and ATS compatibility.
+    Returns parsed resume data, match score, ATS compatibility.
     """
     # --- Step A: Extract raw text ---
     raw_text = extract_text(file)
@@ -340,6 +356,9 @@ async def analyze_resume(
         "raw_text_preview": raw_text[:200]
     })
 
+# -----------------------------------------------------------
+# 7. Cover Letter Endpoint
+# -----------------------------------------------------------
 @app.post("/cover-letter")
 async def cover_letter(
     file: UploadFile = File(...),
@@ -348,13 +367,13 @@ async def cover_letter(
     """
     Generates a cover letter based on the uploaded resume and job description.
     """
-    # Extract text from the uploaded file (reuse the same extraction function)
     raw_text = extract_text(file)
     if not raw_text or len(raw_text.strip()) < 50:
         raise HTTPException(status_code=400, detail="Could not extract sufficient text from the file.")
 
     letter = generate_cover_letter(raw_text, job_desc)
     return JSONResponse(content={"cover_letter": letter})
+
 # -----------------------------------------------------------
 # Health check
 # -----------------------------------------------------------
