@@ -7,7 +7,7 @@
 #           ATS compatibility check.
 # 100% free tier compatible.
 # ============================================================
-
+print("=== Starting main.py ===", flush=True)
 import os
 import json
 import logging
@@ -59,6 +59,7 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
 # FastAPI app
+print("=== Creating FastAPI app ===", flush=True)
 app = FastAPI(title="AI Resume Analyzer")
 
 # Basic logging
