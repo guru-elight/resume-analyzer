@@ -1,0 +1,88 @@
+/* 1. Load external fonts first */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* 2. Then Tailwind */
+@import "tailwindcss";
+
+@theme {
+  --color-netflix-red: #E50914;
+  --color-netflix-dark: #0A0A0A;
+  --color-netflix-card: #141414;
+  --color-netflix-border: #222222;
+  --color-netflix-text: #B3B3B3;
+
+  --color-background: #0A0A0A;
+  --color-foreground: #FFFFFF;
+  --color-card: #141414;
+  --color-card-foreground: #FFFFFF;
+  --color-primary: #E50914;
+  --color-primary-foreground: #FFFFFF;
+  --color-border: #222222;
+  --color-input: #222222;
+  --color-ring: #E50914;
+
+  --radius-lg: 0.75rem;
+  --radius-md: 0.5rem;
+  --radius-sm: 0.25rem;
+
+  --animate-fade-up: fade-up 0.5s ease-out;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+
+  @keyframes fade-up {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(229, 9, 20, 0.4); }
+    50% { box-shadow: 0 0 40px rgba(229, 9, 20, 0.8); }
+  }
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Glass card utility */
+.glass-card {
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Print styles for PDF report */
+@media print {
+  body {
+    background-color: white !important;
+    color: #000 !important;
+  }
+
+  .glass-card,
+  .glass-card * {
+    background: white !important;
+    color: #000 !important;
+    backdrop-filter: none !important;
+    border-color: #ddd !important;
+    box-shadow: none !important;
+  }
+
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .score-circle-print svg circle:first-of-type {
+    stroke: #ddd !important;
+  }
+}
