@@ -374,9 +374,9 @@ export default function Home() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {result.match?.skills_match?.matching?.length > 0 ? (
+                  {(result.match?.skills_match?.matching?.length ?? 0) > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {result.match.skills_match.matching.map((skill, idx) => (
+                      {result.match?.skills_match?.matching?.map((skill, idx) => (
                         <span key={idx} className="px-3 py-1 bg-green-500/10 text-green-400 rounded-full text-xs font-medium border border-green-500/20">
                           {skill}
                         </span>
@@ -396,9 +396,9 @@ export default function Home() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {result.match?.skills_match?.missing?.length > 0 ? (
+                  {(result.match?.skills_match?.missing?.length ?? 0) > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {result.match.skills_match.missing.map((skill, idx) => (
+                      {result.match?.skills_match?.missing?.map((skill, idx) => (
                         <span key={idx} className="px-3 py-1 bg-red-500/10 text-red-400 rounded-full text-xs font-medium border border-red-500/20">
                           {skill}
                         </span>
@@ -440,7 +440,7 @@ export default function Home() {
             )}
 
             {/* Suggestions */}
-            {result.match?.suggestions?.length > 0 && (
+            {((result.match?.suggestions?.length ?? 0) > 0) && (
               <Card className="glass-card border border-white/10">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
@@ -449,7 +449,7 @@ export default function Home() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {result.match.suggestions.map((suggestion, idx) => (
+                  {result.match?.suggestions?.map((suggestion, idx) => (
                     <div key={idx} className="flex gap-3 items-start p-3 bg-white/5 rounded-lg">
                       <ThumbsUp className="w-4 h-4 text-netflix-red mt-0.5 flex-shrink-0" />
                       <p className="text-sm text-gray-300">{suggestion}</p>
