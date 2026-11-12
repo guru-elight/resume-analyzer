@@ -104,14 +104,27 @@ def extract_text(file: UploadFile) -> str:
 
     # Fallback to pdfplumber for PDFs
     if filename.endswith(".pdf"):
+        text = ""
         try:
             import io
             with pdfplumber.open(io.BytesIO(content)) as pdf:
                 text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-                return text if text.strip() else ""
         except Exception as e:
-            logging.error(f"pdfplumber failed: {e}")
-            raise HTTPException(status_code=400, detail="Could not read PDF file.")
+            logging.warning(f"pdfplumber extraction failed: {e}")
+
+        # If pdfplumber extracted nothing or very little, try pypdf as fallback
+        if not text or len(text.strip()) < 50:
+            try:
+                import io
+                from pypdf import PdfReader
+                reader = PdfReader(io.BytesIO(content))
+                pypdf_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                if len(pypdf_text.strip()) > len(text.strip()):
+                    text = pypdf_text
+            except Exception as e:
+                logging.warning(f"pypdf fallback extraction failed: {e}")
+
+        return text.strip()
 
     # Fallback to python-docx
     elif filename.endswith(".docx"):
